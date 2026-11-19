@@ -305,7 +305,7 @@ def create_app(database_path: str | Path | None = None, token_secret: str | byte
             raise HTTPException(409, "An account with this email already exists.")
         return {
             "access_token": _create_token(user, secret),
-            "token_type": "bearer",
+            "token_type": "bearer",  # nosec B105 - protocol label, not a credential
             "user": {"id": user["id"], "email": user["email"], "role": user["role"]},
         }
 
