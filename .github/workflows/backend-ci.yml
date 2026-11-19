@@ -1,0 +1,36 @@
+name: ARMIN MARKET backend CI
+
+on:
+  push:
+    branches: [main, feat/armin-market-api-mvp-2026-11-19]
+    paths:
+      - "backend/**"
+      - ".dockerignore"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: armin-market-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements.txt pytest httpx pip-audit bandit
+      - run: python -m compileall -q backend
+      - run: pytest -q backend/tests
+      - run: pip-audit -r backend/requirements.txt
+      - run: bandit -q -r backend/app
+      - run: docker build --pull --tag armin-market-api:ci -f backend/Dockerfile .

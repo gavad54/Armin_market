@@ -1,0 +1,13 @@
+.git
+.github
+.gradle
+.idea
+**/build
+**/*.apk
+**/*.aab
+backend/data
+**/__pycache__
+**/.pytest_cache
+.venv
+.env
+.env.*
