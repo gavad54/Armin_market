@@ -5,6 +5,7 @@ on:
     branches: [main, feat/armin-market-api-mvp-2026-11-19]
     paths:
       - "backend/**"
+      - ".dockerignore"
       - ".github/workflows/backend-ci.yml"
   pull_request:
     branches: [main]
