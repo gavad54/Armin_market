@@ -124,9 +124,10 @@ def create_app(database_path: str | Path | None = None, token_secret: str | byte
     db_path = Path(database_path or os.getenv("ARMIN_DATABASE_PATH", "backend/data/armin-market.sqlite"))
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
+    is_production = os.getenv("ARMIN_ENV", "development").casefold() == "production"
     secret_value = token_secret or os.getenv("ARMIN_TOKEN_SECRET")
     if secret_value is None:
-        if os.getenv("ARMIN_ENV", "development").casefold() == "production":
+        if is_production:
             raise RuntimeError("ARMIN_TOKEN_SECRET must be configured in production.")
         secret_value = secrets.token_urlsafe(48)
     secret = secret_value.encode("utf-8") if isinstance(secret_value, str) else secret_value
@@ -206,7 +207,13 @@ def create_app(database_path: str | Path | None = None, token_secret: str | byte
             """)
 
     initialize_database()
-    app = FastAPI(title="ARMIN MARKET API", version="0.1.0")
+    app = FastAPI(
+        title="ARMIN MARKET API",
+        version="0.1.0",
+        docs_url=None if is_production else "/docs",
+        redoc_url=None if is_production else "/redoc",
+        openapi_url=None if is_production else "/openapi.json",
+    )
     app.state.database_path = str(db_path)
 
     @app.middleware("http")
