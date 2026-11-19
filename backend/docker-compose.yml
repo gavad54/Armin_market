@@ -1,0 +1,17 @@
+services:
+  armin-market-api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    ports:
+      - "${ARMIN_API_PORT:-8000}:8000"
+    environment:
+      ARMIN_ENV: production
+      ARMIN_TOKEN_SECRET: ${ARMIN_TOKEN_SECRET:?Set ARMIN_TOKEN_SECRET in the local environment}
+      ARMIN_DATABASE_PATH: /data/armin-market.sqlite
+    volumes:
+      - armin-market-data:/data
+    restart: unless-stopped
+
+volumes:
+  armin-market-data:
