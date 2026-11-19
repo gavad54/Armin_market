@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -12,6 +13,7 @@ import time
 import uuid
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Literal
 
@@ -56,6 +58,16 @@ class RequestInput(BaseModel):
     currency: str = Field(pattern=CURRENCY_PATTERN)
     delivery_city: str = Field(min_length=2, max_length=100)
     needed_by: date | None = None
+
+    @field_validator("quantity")
+    @classmethod
+    def positive_quantity(cls, value: str) -> str:
+        try:
+            if Decimal(value) <= 0:
+                raise ValueError("Quantity must be greater than zero.")
+        except InvalidOperation:
+            raise ValueError("Quantity must be a valid decimal string.")
+        return value
 
 
 class QuoteInput(BaseModel):
@@ -197,6 +209,15 @@ def create_app(database_path: str | Path | None = None, token_secret: str | byte
     app = FastAPI(title="ARMIN MARKET API", version="0.1.0")
     app.state.database_path = str(db_path)
 
+    @app.middleware("http")
+    async def security_headers(request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     def current_user(authorization: str | None = Header(default=None)):
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException(401, "Authentication required.")
@@ -212,7 +233,7 @@ def create_app(database_path: str | Path | None = None, token_secret: str | byte
             if not isinstance(payload.get("exp"), int) or payload["exp"] <= int(time.time()):
                 raise ValueError("Expired token")
             user_id = payload["sub"]
-        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+        except (ValueError, TypeError, KeyError, AttributeError, binascii.Error, json.JSONDecodeError):
             raise HTTPException(401, "Invalid or expired authentication token.")
 
         with connection() as conn:
@@ -299,6 +320,8 @@ def create_app(database_path: str | Path | None = None, token_secret: str | byte
     @app.post("/api/v1/requests", status_code=201)
     def create_request(body: RequestInput, user=Depends(current_user)):
         require_role(user, "buyer")
+        if body.needed_by is not None and body.needed_by < date.today():
+            raise HTTPException(422, "Requested delivery date must be today or later.")
         request_id = str(uuid.uuid4())
         now = _utc_now()
         with connection() as conn:
@@ -419,15 +442,17 @@ def create_app(database_path: str | Path | None = None, token_secret: str | byte
                 raise HTTPException(404, "Submitted quote not found.")
             if quote_row["valid_until"] < date.today().isoformat():
                 raise HTTPException(409, "This quote has expired.")
-            conn.execute(
-                "UPDATE supplier_quotes SET status=CASE WHEN id=? THEN 'SELECTED' ELSE 'NOT_SELECTED' END WHERE request_id=?",
-                (body.quote_id, request_id),
-            )
-            conn.execute(
+            updated = conn.execute(
                 """UPDATE purchase_requests
                    SET status='QUOTE_SELECTED_PENDING_PARTIES',selected_quote_id=?,updated_at=?
                    WHERE id=? AND buyer_id=? AND status='OPEN'""",
                 (body.quote_id, _utc_now(), request_id, user["id"]),
+            )
+            if updated.rowcount != 1:
+                raise HTTPException(409, "The request changed while selecting a quote; reload and try again.")
+            conn.execute(
+                "UPDATE supplier_quotes SET status=CASE WHEN id=? THEN 'SELECTED' ELSE 'NOT_SELECTED' END WHERE request_id=?",
+                (body.quote_id, request_id),
             )
             audit(conn, user["id"], "buyer_quote.selected", "purchase_request", request_id,
                   {"quote_id": body.quote_id})
