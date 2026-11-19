@@ -216,7 +216,7 @@ def test_zero_quantity_and_past_delivery_date_are_rejected(client):
     assert past.status_code == 422
 
 
-def test_expired_quote_cannot_be_selected(client):
+def test_quote_with_past_validity_date_is_rejected(client):
     buyer = register(client, "buyer", "expired-buyer@example.test")
     seller = register(client, "seller", "expired-seller@example.test")
     request = create_request(client, buyer)
