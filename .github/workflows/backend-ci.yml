@@ -28,7 +28,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: pip install -r backend/requirements.txt pytest httpx
+      - run: pip install -r backend/requirements.txt pytest httpx pip-audit bandit
       - run: python -m compileall -q backend
       - run: pytest -q backend/tests
+      - run: pip-audit -r backend/requirements.txt
+      - run: bandit -q -r backend/app
       - run: docker build --pull --tag armin-market-api:ci -f backend/Dockerfile .
