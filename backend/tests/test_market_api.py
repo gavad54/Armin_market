@@ -111,7 +111,7 @@ def test_roles_are_enforced_for_request_and_quote_operations(client):
     request = create_request(client, buyer)
 
     seller_create = client.post("/api/v1/requests", headers=seller, json={
-        "title": "درخواست نامجاز", "description": "شرح", "category": "other",
+        "title": "درخواست نامجاز", "description": "شرح کامل درخواست", "category": "other",
         "quantity": "1", "unit": "عدد", "currency": "IRR",
         "delivery_city": "تهران", "needed_by": None,
     })
