@@ -36,6 +36,7 @@ private val Line = Color(0xFFE2EBF1)
 
 private data class MarketCategory(val title: String, val icon: String, val subtitle: String)
 private data class MarketProduct(val name: String, val category: String, val price: String, val badge: String, val seller: String)
+private data class MarketInsightModule(val id: String, val title: String, val purpose: String, val inputs: String, val output: String)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -86,7 +87,7 @@ private fun ArminMarketApp() {
                 NavigationBar(containerColor = Color.White, contentColor = Ink, tonalElevation = 12.dp) {
                     val destinations = listOf(
                         Triple("خانه", "⌂", 0), Triple("دسته‌ها", "▦", 1),
-                        Triple("ثبت نیاز", "+", 2), Triple("پیشنهادها", "⇄", 3), Triple("حساب من", "●", 4)
+                        Triple("ثبت نیاز", "+", 2), Triple("پیشنهادها", "⇄", 3), Triple("تحلیل بازار", "◈", 5), Triple("حساب من", "●", 4)
                     )
                     destinations.forEach { item ->
                         NavigationBarItem(
@@ -146,6 +147,7 @@ private fun ArminMarketApp() {
                         { requestTitle = ""; requestSent = false }
                     )
                     3 -> OffersScreen { notice = "انتخاب پیشنهاد در نسخه نمایشی ثبت شد؛ هنوز معامله واقعی انجام نمی‌شود." }
+                    5 -> MarketIntelligenceScreen { notice = it }
                     else -> ProfileScreen(cart.size, { selectedTab = 3 }) { notice = it }
                 }
                 selectedProduct?.let { product ->
@@ -408,6 +410,101 @@ private fun OffersScreen(onSelect: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+
+@Composable
+private fun MarketIntelligenceScreen(onNotice: (String) -> Unit) {
+    val modules = listOf(
+        MarketInsightModule("ARIA-PROBLEM-MODULE-011", "ارزیاب ارزش خرید", "ارزیابی تناسب قیمت با مشخصات و نیاز خریدار.", "مشخصات کالا، قیمت‌های مجاز و معیارهای خریدار", "گزارش ارزش خرید و عوامل مؤثر"),
+        MarketInsightModule("ARIA-PROBLEM-MODULE-012", "مقایسه‌گر قیمت و مشخصات", "مقایسه چند پیشنهاد بر اساس واحد، مشخصات و شرایط یکسان.", "پیشنهادها، مشخصات فنی، زمان و شرایط فروش", "جدول مقایسه هم‌تراز و اختلاف‌ها"),
+        MarketInsightModule("ARIA-PROBLEM-MODULE-013", "راهنمای کاهش ریسک خرید دست‌دوم", "چک‌لیست بررسی آگهی، وضعیت کالا و شواهد فروشنده.", "شرح کالا، مدارک و شواهد قابل بررسی", "چک‌لیست ریسک و موارد نیازمند بررسی"),
+        MarketInsightModule("ARIA-IDEA-MODULE-004", "تحلیل هزینه‌کرد تأمین", "تحلیل ساختار هزینه خرید و شناسایی تمرکز تأمین.", "سوابق خرید مجاز، گروه کالا و هزینه‌ها", "گزارش هزینه و فرصت بهینه‌سازی"),
+        MarketInsightModule("ARIA-IDEA-MODULE-019", "تحلیل ریسک نگهداشت مشتری", "شناسایی نشانه‌های کاهش تعامل در داده‌های مجاز بازار.", "شاخص‌های تجمیعی و مجاز تعامل", "هشدار توضیح‌پذیر و پیشنهاد بررسی"),
+        MarketInsightModule("ARIA-IDEA-MODULE-025", "دروازه تصمیم سبد پروژه", "مقایسه فرصت‌ها بر اساس ارزش، هزینه، ریسک و ظرفیت.", "فرصت‌ها، مفروضات، هزینه و ظرفیت", "رتبه‌بندی سناریویی با عدم‌قطعیت"),
+        MarketInsightModule("ARIA-IDEA-MODULE-029", "پایش شاخص‌های سطح خدمت", "پایش روند شاخص‌های خدمت و هشدار درباره انحراف.", "تعریف SLA، رویدادها و زمان‌های ثبت‌شده", "گزارش انحراف و اقدام پیشنهادی"),
+        MarketInsightModule("ARIA-IDEA-MODULE-034", "کاتالوگ داده و تبارشناسی بازار", "ثبت منبع، مالکیت، مجوز و زنجیره تبدیل داده‌های بازار.", "منبع داده، مجوز استفاده و فراداده", "کاتالوگ منبع و مسیر داده"),
+        MarketInsightModule("ARIA-IDEA-MODULE-036", "دفتر تعاریف شاخص‌ها", "یکسان‌سازی تعریف KPI، فرمول و منبع هر شاخص.", "نام شاخص، فرمول، واحد و منبع", "تعریف نسخه‌دار KPI"),
+        MarketInsightModule("ARIA-IDEA-MODULE-037", "دفتر شواهد آزمایش محصول", "ثبت فرضیه، آزمایش و شواهد تصمیم‌گیری محصول.", "فرضیه، گروه آزمایش، معیار و نتایج", "گزارش آزمایش و نتیجه قابل بازبینی"),
+        MarketInsightModule("ARIA-IDEA-MODULE-039", "اولویت‌بندی درخواست قابلیت", "اولویت‌بندی درخواست‌ها بر اساس ارزش بازار و شواهد.", "درخواست، شواهد، هزینه و ریسک", "صف اولویت‌بندی و دلیل تصمیم")
+    )
+    var selected by remember { mutableStateOf<MarketInsightModule?>(null) }
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Text("هوشمندی بازار", color = Ink, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
+            Text("تحلیل قیمت، تقاضا، فرصت و شواهد برای تصمیم بهتر در بازار.", color = Muted, fontSize = 12.sp)
+        }
+        item {
+            Surface(
+                color = Color(0xFFFFF6E6),
+                shape = RoundedCornerShape(15.dp),
+                border = BorderStroke(1.dp, Color(0xFFEAD9B5))
+            ) {
+                Text(
+                    "وضعیت فعلی: این صفحه نمونه طراحی است. داده زنده بازار، منابع قیمت و اتصال فروشندگان هنوز متصل و راستی‌آزمایی نشده‌اند.",
+                    Modifier.padding(13.dp),
+                    color = Color(0xFF75551C),
+                    fontSize = 11.sp,
+                    lineHeight = 18.sp
+                )
+            }
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatCard("منابع زنده", "۰", Modifier.weight(1f))
+                StatCard("تحلیل‌های تأییدشده", "۰", Modifier.weight(1f))
+                StatCard("ماژول‌های طراحی‌شده", "۱۱", Modifier.weight(1f))
+            }
+        }
+        item {
+            Text("ابزارهای تحلیل و تصمیم", color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("هر ابزار ورودی، خروجی و وضعیت اتصال مشخص دارد.", color = Muted, fontSize = 11.sp)
+        }
+        items(modules) { module ->
+            Surface(
+                Modifier.fillMaxWidth().clickable { selected = module },
+                color = Color.White,
+                shape = RoundedCornerShape(17.dp),
+                border = BorderStroke(1.dp, Line)
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(module.title, color = Ink, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text(module.purpose, color = Muted, fontSize = 11.sp, lineHeight = 17.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("شناسه: " + module.id, color = TealDark, fontSize = 9.sp)
+                        Text("مشاهده قرارداد ←", color = TealDark, fontWeight = FontWeight.SemiBold, fontSize = 10.sp)
+                    }
+                }
+            }
+        }
+        item { TrustNote() }
+    }
+    selected?.let { module ->
+        AlertDialog(
+            onDismissRequest = { selected = null },
+            containerColor = Color.White,
+            title = { Text(module.title, color = Ink, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text(module.purpose, color = Ink, fontSize = 12.sp)
+                    Text("ورودی‌ها: " + module.inputs, color = Muted, fontSize = 11.sp)
+                    Text("خروجی مورد انتظار: " + module.output, color = Muted, fontSize = 11.sp)
+                    Text("وضعیت: طراحی‌شده؛ اتصال داده و اجرای واقعی تأیید نشده است.", color = Color(0xFF8A651F), fontSize = 11.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    selected = null
+                    onNotice("قرارداد ماژول نمایش داده شد؛ برای اجرای واقعی به منبع داده و سرویس متصل نیاز است.")
+                }) { Text("متوجه شدم") }
+            },
+            dismissButton = { TextButton(onClick = { selected = null }) { Text("بستن") } }
+        )
     }
 }
 
