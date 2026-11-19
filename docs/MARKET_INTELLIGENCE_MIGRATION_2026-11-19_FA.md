@@ -58,4 +58,4 @@ README شاخه main مخزن gavad54/Armin_market می‌گوید پروژه د
 8. فعال‌سازی تجاری فقط پس از آزمون end-to-end، امنیت، backup/restore و انتشار امضاشده.
 
 ## وضعیت
-DESIGN_DOCUMENTED / IMPLEMENTATION_NOT_STARTED_IN_THIS_CHANGE. هیچ ماژول جدیدی در این commit به‌عنوان runtime فعال یا درآمد زنده معرفی نمی‌شود.
+UI_CATALOG_PROTOTYPE_ADDED / BACKEND_AND_LIVE_DATA_NOT_IMPLEMENTED. صفحه Android شامل 11 کارت ماژول با هدف، ورودی، خروجی و وضعیت اتصال است. یک build موفق debug APK در GitHub Actions با artifact ثبت شده؛ یک تلاش بعدی به علت resolve نشدن موقت dependencyهای Maven شکست خورد. هیچ feed زنده بازار، backend فروشندگان یا درآمد واقعی فعال نیست.
