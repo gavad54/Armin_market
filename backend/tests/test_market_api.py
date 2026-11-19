@@ -228,3 +228,16 @@ def test_quote_with_past_validity_date_is_rejected(client):
         "note": "",
     })
     assert quote.status_code == 422
+
+
+def test_production_requires_explicit_secret_and_disables_public_docs(tmp_path, monkeypatch):
+    monkeypatch.setenv("ARMIN_ENV", "production")
+    monkeypatch.delenv("ARMIN_TOKEN_SECRET", raising=False)
+    with pytest.raises(RuntimeError):
+        create_app(database_path=tmp_path / "production.sqlite")
+
+    monkeypatch.setenv("ARMIN_TOKEN_SECRET", "production-test-secret-with-at-least-32-bytes")
+    production_app = create_app(database_path=tmp_path / "production.sqlite")
+    with TestClient(production_app) as production_client:
+        assert production_client.get("/docs").status_code == 404
+        assert production_client.get("/openapi.json").status_code == 404
