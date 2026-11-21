@@ -81,13 +81,17 @@ private fun ArminMarketApp() {
     var selectedProduct by remember { mutableStateOf<MarketProduct?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
 
+    fun saveCart(updatedCart: List<MarketCartLine>) {
+        cartPreferences.edit()
+            .putString("snapshot", MarketCartSnapshotCodec.encode(updatedCart))
+            .apply()
+        cart = updatedCart
+    }
+
     fun addProductToCart(product: MarketProduct) {
         try {
             val updatedCart = MarketCart.add(cart, MarketCartItem(product.sku, product.priceToman))
-            cartPreferences.edit()
-                .putString("snapshot", MarketCartSnapshotCodec.encode(updatedCart))
-                .apply()
-            cart = updatedCart
+            saveCart(updatedCart)
             notice = "به سبد آزمایشی ذخیره‌شده روی همین دستگاه اضافه شد؛ ثبت سفارش و پرداخت هنوز فعال نیست."
         } catch (error: IllegalArgumentException) {
             notice = "افزودن انجام نشد: اطلاعات این قلم با سبد سازگار نیست."
@@ -173,7 +177,17 @@ private fun ArminMarketApp() {
                     )
                     3 -> OffersScreen { notice = "انتخاب پیشنهاد در نسخه نمایشی ثبت شد؛ هنوز معامله واقعی انجام نمی‌شود." }
                     5 -> MarketIntelligenceScreen { notice = it }
-                    else -> ProfileScreen(MarketCart.itemCount(cart), { selectedTab = 3 }) { notice = it }
+                    6 -> CartScreen(
+                        cart = cart, products = products,
+                        onQuantity = { sku, quantity ->
+                            runCatching { saveCart(MarketCart.setQuantity(cart, sku, quantity)) }
+                                .onFailure { notice = "تغییر تعداد انجام نشد." }
+                        },
+                        onRemove = { sku -> saveCart(MarketCart.remove(cart, sku)) },
+                        onClear = { saveCart(MarketCart.clear()); notice = "سبد آزمایشی پاک شد." },
+                        onNotice = { notice = it }
+                    )
+                    else -> ProfileScreen(MarketCart.itemCount(cart), { selectedTab = 3 }, { selectedTab = 6 }) { notice = it }
                 }
                 selectedProduct?.let { product ->
                     ProductDetailSheet(product, { selectedProduct = null }, {
@@ -533,7 +547,7 @@ private fun MarketIntelligenceScreen(onNotice: (String) -> Unit) {
 }
 
 @Composable
-private fun ProfileScreen(cartCount: Int, onOrders: () -> Unit, onNotice: (String) -> Unit) {
+private fun ProfileScreen(cartCount: Int, onOrders: () -> Unit, onCart: () -> Unit, onNotice: (String) -> Unit) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
             Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
@@ -554,6 +568,19 @@ private fun ProfileScreen(cartCount: Int, onOrders: () -> Unit, onNotice: (Strin
                 StatCard("پیام‌ها", "۰", Modifier.weight(1f))
             }
         }
+        item {
+            Surface(Modifier.fillMaxWidth().clickable(onClick = onCart), color = Color.White,
+                shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, Line)) {
+                Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("سبد خرید آزمایشی", color = Ink, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("$cartCount قلم؛ ذخیره‌شده روی همین دستگاه", color = Muted, fontSize = 11.sp)
+                    }
+                    Text("←", color = TealDark, fontSize = 18.sp)
+                }
+            }
+        }
         items(listOf("اطلاعات حساب کاربری", "درخواست‌های من", "پیشنهادهای من", "پیام‌ها و اعلان‌ها", "تنظیمات و حریم خصوصی", "راهنما و پشتیبانی")) { label ->
             Surface(Modifier.fillMaxWidth().clickable {
                 if (label == "پیشنهادهای من" || label == "درخواست‌های من") onOrders()
@@ -569,6 +596,62 @@ private fun ProfileScreen(cartCount: Int, onOrders: () -> Unit, onNotice: (Strin
     }
 }
 
+@Composable
+private fun CartScreen(
+    cart: List<MarketCartLine>, products: List<MarketProduct>,
+    onQuantity: (String, Int) -> Unit, onRemove: (String) -> Unit,
+    onClear: () -> Unit, onNotice: (String) -> Unit
+) {
+    val productNames = products.associateBy { it.sku }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("سبد خرید آزمایشی", color = Ink, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
+                Text("اطلاعات فقط روی همین دستگاه ذخیره می‌شود؛ سفارش و پرداخت واقعی فعال نیست.", color = Muted, fontSize = 11.sp)
+            }
+        }
+        if (cart.isEmpty()) {
+            item { EmptyState("سبد شما خالی است", "از بخش محصولات، کالاهای موردنظر را اضافه کنید.") }
+        } else {
+            items(cart, key = { it.sku }) { line ->
+                val product = productNames[line.sku]
+                Surface(color = Color.White, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Line)) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(product?.name ?: line.sku, color = Ink, fontWeight = FontWeight.Bold)
+                        Text("${line.unitPriceToman} تومان برای هر عدد", color = TealDark, fontSize = 12.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedButton(onClick = { onQuantity(line.sku, line.quantity - 1) }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text("−") }
+                            Text(line.quantity.toString(), color = Ink, fontWeight = FontWeight.Bold)
+                            OutlinedButton(onClick = {
+                                if (line.quantity < Int.MAX_VALUE) onQuantity(line.sku, line.quantity + 1)
+                                else onNotice("حداکثر تعداد مجاز ثبت شده است.")
+                            }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text("+") }
+                            Spacer(Modifier.weight(1f))
+                            TextButton(onClick = { onRemove(line.sku) }) { Text("حذف") }
+                        }
+                    }
+                }
+            }
+            item {
+                Surface(color = Color.White, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Line)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                            Text("تعداد اقلام", color = Muted)
+                            Text(MarketCart.itemCount(cart).toString(), color = Ink, fontWeight = FontWeight.Bold)
+                        }
+                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                            Text("جمع آزمایشی", color = Ink, fontWeight = FontWeight.Bold)
+                            Text("${MarketCart.totalToman(cart)} تومان", color = TealDark, fontWeight = FontWeight.ExtraBold)
+                        }
+                        Text("این مبلغ پیش‌فاکتور نیست و پرداخت یا رزرو کالا انجام نمی‌دهد.", color = Muted, fontSize = 10.sp)
+                        OutlinedButton(onClick = onClear, modifier = Modifier.fillMaxWidth()) { Text("پاک‌کردن کامل سبد") }
+                    }
+                }
+            }
+        }
+    }
+}
 @Composable
 private fun StatCard(label: String, value: String, modifier: Modifier) {
     Surface(modifier, color = Color.White, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Line)) {
