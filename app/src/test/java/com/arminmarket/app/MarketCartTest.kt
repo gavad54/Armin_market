@@ -44,7 +44,9 @@ class MarketCartTest {
         assertEquals(350L, MarketCart.totalToman(updated))
         assertEquals(1, MarketCart.remove(updated, "DEMO-A24").size)
         assertEquals(emptyList<MarketCartLine>(), MarketCart.clear())
-        assertEquals(emptyList<MarketCartLine>(), MarketCart.setQuantity(updated, "DEMO-A24", 0))
+        val zeroQuantity = MarketCart.setQuantity(updated, "DEMO-A24", 0)
+        assertEquals(1, zeroQuantity.size)
+        assertEquals("DEMO-HEADSET", zeroQuantity.single().sku)
     }
 
     @Test
