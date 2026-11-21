@@ -28,6 +28,18 @@ object MarketCart {
         }
     }
 
+    fun remove(lines: List<MarketCartLine>, sku: String): List<MarketCartLine> =
+        lines.filterNot { it.sku == sku }
+
+    fun setQuantity(lines: List<MarketCartLine>, sku: String, quantity: Int): List<MarketCartLine> {
+        require(quantity >= 0) { "INVALID_QUANTITY" }
+        if (quantity == 0) return remove(lines, sku)
+        require(lines.any { it.sku == sku }) { "CART_ITEM_NOT_FOUND" }
+        return lines.map { if (it.sku == sku) it.copy(quantity = quantity) else it }
+    }
+
+    fun clear(): List<MarketCartLine> = emptyList()
+
     fun itemCount(lines: List<MarketCartLine>): Int =
         lines.fold(0) { total, line ->
             require(line.quantity > 0) { "INVALID_QUANTITY" }
