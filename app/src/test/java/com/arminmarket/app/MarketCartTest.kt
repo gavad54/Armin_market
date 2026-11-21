@@ -35,6 +35,30 @@ class MarketCartTest {
     }
 
     @Test
+    fun supportsQuantityUpdatesRemovalAndClear() {
+        val first = MarketCart.add(emptyList(), MarketCartItem("DEMO-A24", 100L))
+        val second = MarketCart.add(first, MarketCartItem("DEMO-HEADSET", 50L))
+        val updated = MarketCart.setQuantity(second, "DEMO-A24", 3)
+
+        assertEquals(4, MarketCart.itemCount(updated))
+        assertEquals(350L, MarketCart.totalToman(updated))
+        assertEquals(1, MarketCart.remove(updated, "DEMO-A24").size)
+        assertEquals(emptyList<MarketCartLine>(), MarketCart.clear())
+        assertEquals(emptyList<MarketCartLine>(), MarketCart.setQuantity(updated, "DEMO-A24", 0))
+    }
+
+    @Test
+    fun rejectsUnknownSkuForQuantityUpdateAndNegativeQuantity() {
+        assertThrows(IllegalArgumentException::class.java) {
+            MarketCart.setQuantity(emptyList(), "DEMO-MISSING", 2)
+        }
+        val cart = MarketCart.add(emptyList(), MarketCartItem("DEMO-A24", 100L))
+        assertThrows(IllegalArgumentException::class.java) {
+            MarketCart.setQuantity(cart, "DEMO-A24", -1)
+        }
+    }
+
+    @Test
     fun rejectsArithmeticOverflowInCartTotal() {
         val cart = listOf(MarketCartLine("DEMO-1", Long.MAX_VALUE, 2))
         assertThrows(ArithmeticException::class.java) {
