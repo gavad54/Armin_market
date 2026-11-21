@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,7 +66,16 @@ private fun ArminMarketApp() {
     var selectedTab by remember { mutableIntStateOf(0) }
     var search by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
-    var cart by remember { mutableStateOf(emptyList<MarketCartLine>()) }
+    val appContext = LocalContext.current.applicationContext
+    val cartPreferences = remember(appContext) {
+        appContext.getSharedPreferences("armin_market_cart", android.content.Context.MODE_PRIVATE)
+    }
+    var cart by remember {
+        mutableStateOf(
+            runCatching { MarketCartSnapshotCodec.decode(cartPreferences.getString("snapshot", null)) }
+                .getOrDefault(emptyList())
+        )
+    }
     var requestTitle by remember { mutableStateOf("") }
     var requestSent by remember { mutableStateOf(false) }
     var selectedProduct by remember { mutableStateOf<MarketProduct?>(null) }
@@ -73,8 +83,12 @@ private fun ArminMarketApp() {
 
     fun addProductToCart(product: MarketProduct) {
         try {
-            cart = MarketCart.add(cart, MarketCartItem(product.sku, product.priceToman))
-            notice = "به سبد آزمایشی اضافه شد؛ ثبت سفارش و پرداخت هنوز فعال نیست."
+            val updatedCart = MarketCart.add(cart, MarketCartItem(product.sku, product.priceToman))
+            cartPreferences.edit()
+                .putString("snapshot", MarketCartSnapshotCodec.encode(updatedCart))
+                .apply()
+            cart = updatedCart
+            notice = "به سبد آزمایشی ذخیره‌شده روی همین دستگاه اضافه شد؛ ثبت سفارش و پرداخت هنوز فعال نیست."
         } catch (error: IllegalArgumentException) {
             notice = "افزودن انجام نشد: اطلاعات این قلم با سبد سازگار نیست."
         } catch (error: ArithmeticException) {
