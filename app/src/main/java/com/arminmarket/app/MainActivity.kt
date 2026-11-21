@@ -35,7 +35,7 @@ private val Muted = Color(0xFF6E8493)
 private val Line = Color(0xFFE2EBF1)
 
 private data class MarketCategory(val title: String, val icon: String, val subtitle: String)
-private data class MarketProduct(val name: String, val category: String, val price: String, val badge: String, val seller: String)
+private data class MarketProduct(val sku: String, val name: String, val category: String, val price: String, val priceToman: Long, val badge: String, val seller: String)
 private data class MarketInsightModule(val id: String, val title: String, val purpose: String, val inputs: String, val output: String)
 
 class MainActivity : ComponentActivity() {
@@ -58,18 +58,29 @@ private fun ArminMarketApp() {
         MarketCategory("ورزش و سفر", "↗", "تجهیزات و سرگرمی")
     )
     val products = listOf(
-        MarketProduct("گوشی هوشمند مدل A24", "موبایل و تبلت", "۱۲٬۸۰۰٬۰۰۰ تومان", "پیشنهاد ویژه", "فروشگاه تکنولوژی"),
-        MarketProduct("هدفون بی‌سیم", "لپ‌تاپ و کامپیوتر", "۲٬۴۵۰٬۰۰۰ تومان", "محبوب", "دیجیتال‌کالا"),
-        MarketProduct("ساعت هوشمند", "موبایل و تبلت", "۳٬۷۵۰٬۰۰۰ تومان", "تازه", "اسمارت‌شاپ")
+        MarketProduct("DEMO-A24", "گوشی هوشمند مدل A24", "موبایل و تبلت", "۱۲٬۸۰۰٬۰۰۰ تومان", 12800000L, "پیشنهاد ویژه", "فروشگاه تکنولوژی"),
+        MarketProduct("DEMO-HEADSET", "هدفون بی‌سیم", "لپ‌تاپ و کامپیوتر", "۲٬۴۵۰٬۰۰۰ تومان", 2450000L, "محبوب", "دیجیتال‌کالا"),
+        MarketProduct("DEMO-WATCH", "ساعت هوشمند", "موبایل و تبلت", "۳٬۷۵۰٬۰۰۰ تومان", 3750000L, "تازه", "اسمارت‌شاپ")
     )
     var selectedTab by remember { mutableIntStateOf(0) }
     var search by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
-    var cart by remember { mutableStateOf(listOf<MarketProduct>()) }
+    var cart by remember { mutableStateOf(emptyList<MarketCartLine>()) }
     var requestTitle by remember { mutableStateOf("") }
     var requestSent by remember { mutableStateOf(false) }
     var selectedProduct by remember { mutableStateOf<MarketProduct?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
+
+    fun addProductToCart(product: MarketProduct) {
+        try {
+            cart = MarketCart.add(cart, MarketCartItem(product.sku, product.priceToman))
+            notice = "به سبد آزمایشی اضافه شد؛ ثبت سفارش و پرداخت هنوز فعال نیست."
+        } catch (error: IllegalArgumentException) {
+            notice = "افزودن انجام نشد: اطلاعات این قلم با سبد سازگار نیست."
+        } catch (error: ArithmeticException) {
+            notice = "تعداد یا مبلغ سبد از محدوده مجاز بیشتر است."
+        }
+    }
 
     MaterialTheme(colorScheme = lightColorScheme(
         primary = TealDark, onPrimary = Color.White, secondary = Teal,
@@ -128,7 +139,7 @@ private fun ArminMarketApp() {
                                 (selectedCategory == null || it.category == selectedCategory)
                         },
                         selectedCategory, { selectedCategory = if (selectedCategory == it) null else it },
-                        { product -> cart = cart + product; notice = "به سبد خرید آزمایشی اضافه شد." },
+                        { product -> addProductToCart(product) },
                         { selectedProduct = it }, { selectedTab = 1 }, { selectedTab = 2 }
                     )
                     1 -> CategoriesScreen(categories, search, { search = it }) { category ->
@@ -148,13 +159,12 @@ private fun ArminMarketApp() {
                     )
                     3 -> OffersScreen { notice = "انتخاب پیشنهاد در نسخه نمایشی ثبت شد؛ هنوز معامله واقعی انجام نمی‌شود." }
                     5 -> MarketIntelligenceScreen { notice = it }
-                    else -> ProfileScreen(cart.size, { selectedTab = 3 }) { notice = it }
+                    else -> ProfileScreen(MarketCart.itemCount(cart), { selectedTab = 3 }) { notice = it }
                 }
                 selectedProduct?.let { product ->
                     ProductDetailSheet(product, { selectedProduct = null }, {
-                        cart = cart + product
+                        addProductToCart(product)
                         selectedProduct = null
-                        notice = "به سبد خرید آزمایشی اضافه شد."
                     })
                 }
             }
