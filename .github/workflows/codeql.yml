@@ -13,7 +13,6 @@ on:
 permissions:
   actions: read
   contents: read
-  security-events: write
 
 concurrency:
   group: codeql-${{ github.workflow }}-${{ github.ref }}
@@ -26,10 +25,30 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: java-kotlin
-          build-mode: autobuild
+          build-mode: manual
+      - name: Build Android sources for CodeQL
+        run: gradle --no-daemon :app:assembleDebug
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4
+        with:
+          output: codeql-sarif
+          upload: never
+      - name: Preserve CodeQL SARIF report
+        uses: actions/upload-artifact@v4
+        with:
+          name: armin-market-codeql-sarif
+          path: codeql-sarif/
+          if-no-files-found: error
