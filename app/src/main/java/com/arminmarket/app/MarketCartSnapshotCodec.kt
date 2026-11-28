@@ -3,9 +3,12 @@ package com.arminmarket.app
 /** Versioned local-only snapshot format. It does not submit orders or payments. */
 object MarketCartSnapshotCodec {
     private const val VERSION = "v1"
+    private const val MAX_LINES = 500
+    private const val MAX_SNAPSHOT_CHARS = 64 * 1024
     private val skuPattern = Regex("[A-Z0-9][A-Z0-9._-]{1,39}")
 
     fun encode(lines: List<MarketCartLine>): String {
+        require(lines.size <= MAX_LINES) { "CART_LINE_LIMIT" }
         val seen = mutableSetOf<String>()
         lines.forEach { line ->
             require(skuPattern.matches(line.sku)) { "INVALID_SKU" }
@@ -13,7 +16,7 @@ object MarketCartSnapshotCodec {
             require(line.quantity > 0) { "INVALID_QUANTITY" }
             require(seen.add(line.sku)) { "DUPLICATE_SKU" }
         }
-        return buildString {
+        val snapshot = buildString {
             append(VERSION)
             lines.forEach { line ->
                 append('\n')
@@ -24,12 +27,17 @@ object MarketCartSnapshotCodec {
                 append(line.quantity)
             }
         }
+        require(snapshot.length <= MAX_SNAPSHOT_CHARS) { "SNAPSHOT_TOO_LARGE" }
+        return snapshot
     }
 
     fun decode(snapshot: String?): List<MarketCartLine> {
         if (snapshot.isNullOrBlank()) return emptyList()
+        require(snapshot.length <= MAX_SNAPSHOT_CHARS) { "SNAPSHOT_TOO_LARGE" }
+
         val rows = snapshot.split('\n')
         if (rows.firstOrNull() != VERSION) return emptyList()
+        require(rows.size - 1 <= MAX_LINES) { "CART_LINE_LIMIT" }
 
         val seen = mutableSetOf<String>()
         return rows.drop(1).map { row ->
