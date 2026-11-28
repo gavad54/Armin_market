@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,7 +36,8 @@ private val Muted = Color(0xFF6E8493)
 private val Line = Color(0xFFE2EBF1)
 
 private data class MarketCategory(val title: String, val icon: String, val subtitle: String)
-private data class MarketProduct(val name: String, val category: String, val price: String, val badge: String, val seller: String)
+private data class MarketProduct(val sku: String, val name: String, val category: String, val price: String, val priceToman: Long, val badge: String, val seller: String)
+private data class MarketInsightModule(val id: String, val title: String, val purpose: String, val inputs: String, val output: String)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,18 +59,46 @@ private fun ArminMarketApp() {
         MarketCategory("ورزش و سفر", "↗", "تجهیزات و سرگرمی")
     )
     val products = listOf(
-        MarketProduct("گوشی هوشمند مدل A24", "موبایل و تبلت", "۱۲٬۸۰۰٬۰۰۰ تومان", "پیشنهاد ویژه", "فروشگاه تکنولوژی"),
-        MarketProduct("هدفون بی‌سیم", "لپ‌تاپ و کامپیوتر", "۲٬۴۵۰٬۰۰۰ تومان", "محبوب", "دیجیتال‌کالا"),
-        MarketProduct("ساعت هوشمند", "موبایل و تبلت", "۳٬۷۵۰٬۰۰۰ تومان", "تازه", "اسمارت‌شاپ")
+        MarketProduct("DEMO-A24", "گوشی هوشمند مدل A24", "موبایل و تبلت", "۱۲٬۸۰۰٬۰۰۰ تومان", 12800000L, "پیشنهاد ویژه", "فروشگاه تکنولوژی"),
+        MarketProduct("DEMO-HEADSET", "هدفون بی‌سیم", "لپ‌تاپ و کامپیوتر", "۲٬۴۵۰٬۰۰۰ تومان", 2450000L, "محبوب", "دیجیتال‌کالا"),
+        MarketProduct("DEMO-WATCH", "ساعت هوشمند", "موبایل و تبلت", "۳٬۷۵۰٬۰۰۰ تومان", 3750000L, "تازه", "اسمارت‌شاپ")
     )
     var selectedTab by remember { mutableIntStateOf(0) }
     var search by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
-    var cart by remember { mutableStateOf(listOf<MarketProduct>()) }
+    val appContext = LocalContext.current.applicationContext
+    val cartPreferences = remember(appContext) {
+        appContext.getSharedPreferences("armin_market_cart", android.content.Context.MODE_PRIVATE)
+    }
+    var cart by remember {
+        mutableStateOf(
+            runCatching { MarketCartSnapshotCodec.decode(cartPreferences.getString("snapshot", null)) }
+                .getOrDefault(emptyList())
+        )
+    }
     var requestTitle by remember { mutableStateOf("") }
     var requestSent by remember { mutableStateOf(false) }
     var selectedProduct by remember { mutableStateOf<MarketProduct?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
+
+    fun saveCart(updatedCart: List<MarketCartLine>) {
+        cartPreferences.edit()
+            .putString("snapshot", MarketCartSnapshotCodec.encode(updatedCart))
+            .apply()
+        cart = updatedCart
+    }
+
+    fun addProductToCart(product: MarketProduct) {
+        try {
+            val updatedCart = MarketCart.add(cart, MarketCartItem(product.sku, product.priceToman))
+            saveCart(updatedCart)
+            notice = "به سبد آزمایشی ذخیره‌شده روی همین دستگاه اضافه شد؛ ثبت سفارش و پرداخت هنوز فعال نیست."
+        } catch (error: IllegalArgumentException) {
+            notice = "افزودن انجام نشد: اطلاعات این قلم با سبد سازگار نیست."
+        } catch (error: ArithmeticException) {
+            notice = "تعداد یا مبلغ سبد از محدوده مجاز بیشتر است."
+        }
+    }
 
     MaterialTheme(colorScheme = lightColorScheme(
         primary = TealDark, onPrimary = Color.White, secondary = Teal,
@@ -86,7 +116,7 @@ private fun ArminMarketApp() {
                 NavigationBar(containerColor = Color.White, contentColor = Ink, tonalElevation = 12.dp) {
                     val destinations = listOf(
                         Triple("خانه", "⌂", 0), Triple("دسته‌ها", "▦", 1),
-                        Triple("ثبت نیاز", "+", 2), Triple("پیشنهادها", "⇄", 3), Triple("حساب من", "●", 4)
+                        Triple("ثبت نیاز", "+", 2), Triple("پیشنهادها", "⇄", 3), Triple("تحلیل بازار", "◈", 5), Triple("حساب من", "●", 4)
                     )
                     destinations.forEach { item ->
                         NavigationBarItem(
@@ -127,7 +157,7 @@ private fun ArminMarketApp() {
                                 (selectedCategory == null || it.category == selectedCategory)
                         },
                         selectedCategory, { selectedCategory = if (selectedCategory == it) null else it },
-                        { product -> cart = cart + product; notice = "به سبد خرید آزمایشی اضافه شد." },
+                        { product -> addProductToCart(product) },
                         { selectedProduct = it }, { selectedTab = 1 }, { selectedTab = 2 }
                     )
                     1 -> CategoriesScreen(categories, search, { search = it }) { category ->
@@ -146,13 +176,23 @@ private fun ArminMarketApp() {
                         { requestTitle = ""; requestSent = false }
                     )
                     3 -> OffersScreen { notice = "انتخاب پیشنهاد در نسخه نمایشی ثبت شد؛ هنوز معامله واقعی انجام نمی‌شود." }
-                    else -> ProfileScreen(cart.size, { selectedTab = 3 }) { notice = it }
+                    5 -> MarketIntelligenceScreen { notice = it }
+                    6 -> CartScreen(
+                        cart = cart, products = products,
+                        onQuantity = { sku, quantity ->
+                            runCatching { saveCart(MarketCart.setQuantity(cart, sku, quantity)) }
+                                .onFailure { notice = "تغییر تعداد انجام نشد." }
+                        },
+                        onRemove = { sku -> saveCart(MarketCart.remove(cart, sku)) },
+                        onClear = { saveCart(MarketCart.clear()); notice = "سبد آزمایشی پاک شد." },
+                        onNotice = { notice = it }
+                    )
+                    else -> ProfileScreen(MarketCart.itemCount(cart), { selectedTab = 3 }, { selectedTab = 6 }) { notice = it }
                 }
                 selectedProduct?.let { product ->
                     ProductDetailSheet(product, { selectedProduct = null }, {
-                        cart = cart + product
+                        addProductToCart(product)
                         selectedProduct = null
-                        notice = "به سبد خرید آزمایشی اضافه شد."
                     })
                 }
             }
@@ -411,8 +451,103 @@ private fun OffersScreen(onSelect: () -> Unit) {
     }
 }
 
+
 @Composable
-private fun ProfileScreen(cartCount: Int, onOrders: () -> Unit, onNotice: (String) -> Unit) {
+private fun MarketIntelligenceScreen(onNotice: (String) -> Unit) {
+    val modules = listOf(
+        MarketInsightModule("ARIA-PROBLEM-MODULE-011", "ارزیاب ارزش خرید", "ارزیابی تناسب قیمت با مشخصات و نیاز خریدار.", "مشخصات کالا، قیمت‌های مجاز و معیارهای خریدار", "گزارش ارزش خرید و عوامل مؤثر"),
+        MarketInsightModule("ARIA-PROBLEM-MODULE-012", "مقایسه‌گر قیمت و مشخصات", "مقایسه چند پیشنهاد بر اساس واحد، مشخصات و شرایط یکسان.", "پیشنهادها، مشخصات فنی، زمان و شرایط فروش", "جدول مقایسه هم‌تراز و اختلاف‌ها"),
+        MarketInsightModule("ARIA-PROBLEM-MODULE-013", "راهنمای کاهش ریسک خرید دست‌دوم", "چک‌لیست بررسی آگهی، وضعیت کالا و شواهد فروشنده.", "شرح کالا، مدارک و شواهد قابل بررسی", "چک‌لیست ریسک و موارد نیازمند بررسی"),
+        MarketInsightModule("ARIA-IDEA-MODULE-004", "تحلیل هزینه‌کرد تأمین", "تحلیل ساختار هزینه خرید و شناسایی تمرکز تأمین.", "سوابق خرید مجاز، گروه کالا و هزینه‌ها", "گزارش هزینه و فرصت بهینه‌سازی"),
+        MarketInsightModule("ARIA-IDEA-MODULE-019", "تحلیل ریسک نگهداشت مشتری", "شناسایی نشانه‌های کاهش تعامل در داده‌های مجاز بازار.", "شاخص‌های تجمیعی و مجاز تعامل", "هشدار توضیح‌پذیر و پیشنهاد بررسی"),
+        MarketInsightModule("ARIA-IDEA-MODULE-025", "دروازه تصمیم سبد پروژه", "مقایسه فرصت‌ها بر اساس ارزش، هزینه، ریسک و ظرفیت.", "فرصت‌ها، مفروضات، هزینه و ظرفیت", "رتبه‌بندی سناریویی با عدم‌قطعیت"),
+        MarketInsightModule("ARIA-IDEA-MODULE-029", "پایش شاخص‌های سطح خدمت", "پایش روند شاخص‌های خدمت و هشدار درباره انحراف.", "تعریف SLA، رویدادها و زمان‌های ثبت‌شده", "گزارش انحراف و اقدام پیشنهادی"),
+        MarketInsightModule("ARIA-IDEA-MODULE-034", "کاتالوگ داده و تبارشناسی بازار", "ثبت منبع، مالکیت، مجوز و زنجیره تبدیل داده‌های بازار.", "منبع داده، مجوز استفاده و فراداده", "کاتالوگ منبع و مسیر داده"),
+        MarketInsightModule("ARIA-IDEA-MODULE-036", "دفتر تعاریف شاخص‌ها", "یکسان‌سازی تعریف KPI، فرمول و منبع هر شاخص.", "نام شاخص، فرمول، واحد و منبع", "تعریف نسخه‌دار KPI"),
+        MarketInsightModule("ARIA-IDEA-MODULE-037", "دفتر شواهد آزمایش محصول", "ثبت فرضیه، آزمایش و شواهد تصمیم‌گیری محصول.", "فرضیه، گروه آزمایش، معیار و نتایج", "گزارش آزمایش و نتیجه قابل بازبینی"),
+        MarketInsightModule("ARIA-IDEA-MODULE-039", "اولویت‌بندی درخواست قابلیت", "اولویت‌بندی درخواست‌ها بر اساس ارزش بازار و شواهد.", "درخواست، شواهد، هزینه و ریسک", "صف اولویت‌بندی و دلیل تصمیم")
+    )
+    var selected by remember { mutableStateOf<MarketInsightModule?>(null) }
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Text("هوشمندی بازار", color = Ink, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
+            Text("تحلیل قیمت، تقاضا، فرصت و شواهد برای تصمیم بهتر در بازار.", color = Muted, fontSize = 12.sp)
+        }
+        item {
+            Surface(
+                color = Color(0xFFFFF6E6),
+                shape = RoundedCornerShape(15.dp),
+                border = BorderStroke(1.dp, Color(0xFFEAD9B5))
+            ) {
+                Text(
+                    "وضعیت فعلی: این صفحه نمونه طراحی است. داده زنده بازار، منابع قیمت و اتصال فروشندگان هنوز متصل و راستی‌آزمایی نشده‌اند.",
+                    Modifier.padding(13.dp),
+                    color = Color(0xFF75551C),
+                    fontSize = 11.sp,
+                    lineHeight = 18.sp
+                )
+            }
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatCard("منابع زنده", "۰", Modifier.weight(1f))
+                StatCard("تحلیل‌های تأییدشده", "۰", Modifier.weight(1f))
+                StatCard("ماژول‌های طراحی‌شده", "۱۱", Modifier.weight(1f))
+            }
+        }
+        item {
+            Text("ابزارهای تحلیل و تصمیم", color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("هر ابزار ورودی، خروجی و وضعیت اتصال مشخص دارد.", color = Muted, fontSize = 11.sp)
+        }
+        items(modules) { module ->
+            Surface(
+                Modifier.fillMaxWidth().clickable { selected = module },
+                color = Color.White,
+                shape = RoundedCornerShape(17.dp),
+                border = BorderStroke(1.dp, Line)
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(module.title, color = Ink, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text(module.purpose, color = Muted, fontSize = 11.sp, lineHeight = 17.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("شناسه: " + module.id, color = TealDark, fontSize = 9.sp)
+                        Text("مشاهده قرارداد ←", color = TealDark, fontWeight = FontWeight.SemiBold, fontSize = 10.sp)
+                    }
+                }
+            }
+        }
+        item { TrustNote() }
+    }
+    selected?.let { module ->
+        AlertDialog(
+            onDismissRequest = { selected = null },
+            containerColor = Color.White,
+            title = { Text(module.title, color = Ink, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text(module.purpose, color = Ink, fontSize = 12.sp)
+                    Text("ورودی‌ها: " + module.inputs, color = Muted, fontSize = 11.sp)
+                    Text("خروجی مورد انتظار: " + module.output, color = Muted, fontSize = 11.sp)
+                    Text("وضعیت: طراحی‌شده؛ اتصال داده و اجرای واقعی تأیید نشده است.", color = Color(0xFF8A651F), fontSize = 11.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    selected = null
+                    onNotice("قرارداد ماژول نمایش داده شد؛ برای اجرای واقعی به منبع داده و سرویس متصل نیاز است.")
+                }) { Text("متوجه شدم") }
+            },
+            dismissButton = { TextButton(onClick = { selected = null }) { Text("بستن") } }
+        )
+    }
+}
+
+@Composable
+private fun ProfileScreen(cartCount: Int, onOrders: () -> Unit, onCart: () -> Unit, onNotice: (String) -> Unit) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
             Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
@@ -433,6 +568,19 @@ private fun ProfileScreen(cartCount: Int, onOrders: () -> Unit, onNotice: (Strin
                 StatCard("پیام‌ها", "۰", Modifier.weight(1f))
             }
         }
+        item {
+            Surface(Modifier.fillMaxWidth().clickable(onClick = onCart), color = Color.White,
+                shape = RoundedCornerShape(15.dp), border = BorderStroke(1.dp, Line)) {
+                Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("سبد خرید آزمایشی", color = Ink, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("$cartCount قلم؛ ذخیره‌شده روی همین دستگاه", color = Muted, fontSize = 11.sp)
+                    }
+                    Text("←", color = TealDark, fontSize = 18.sp)
+                }
+            }
+        }
         items(listOf("اطلاعات حساب کاربری", "درخواست‌های من", "پیشنهادهای من", "پیام‌ها و اعلان‌ها", "تنظیمات و حریم خصوصی", "راهنما و پشتیبانی")) { label ->
             Surface(Modifier.fillMaxWidth().clickable {
                 if (label == "پیشنهادهای من" || label == "درخواست‌های من") onOrders()
@@ -448,6 +596,62 @@ private fun ProfileScreen(cartCount: Int, onOrders: () -> Unit, onNotice: (Strin
     }
 }
 
+@Composable
+private fun CartScreen(
+    cart: List<MarketCartLine>, products: List<MarketProduct>,
+    onQuantity: (String, Int) -> Unit, onRemove: (String) -> Unit,
+    onClear: () -> Unit, onNotice: (String) -> Unit
+) {
+    val productNames = products.associateBy { it.sku }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("سبد خرید آزمایشی", color = Ink, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
+                Text("اطلاعات فقط روی همین دستگاه ذخیره می‌شود؛ سفارش و پرداخت واقعی فعال نیست.", color = Muted, fontSize = 11.sp)
+            }
+        }
+        if (cart.isEmpty()) {
+            item { EmptyState("سبد شما خالی است", "از بخش محصولات، کالاهای موردنظر را اضافه کنید.") }
+        } else {
+            items(cart, key = { it.sku }) { line ->
+                val product = productNames[line.sku]
+                Surface(color = Color.White, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Line)) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(product?.name ?: line.sku, color = Ink, fontWeight = FontWeight.Bold)
+                        Text("${line.unitPriceToman} تومان برای هر عدد", color = TealDark, fontSize = 12.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedButton(onClick = { onQuantity(line.sku, line.quantity - 1) }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text("−") }
+                            Text(line.quantity.toString(), color = Ink, fontWeight = FontWeight.Bold)
+                            OutlinedButton(onClick = {
+                                if (line.quantity < Int.MAX_VALUE) onQuantity(line.sku, line.quantity + 1)
+                                else onNotice("حداکثر تعداد مجاز ثبت شده است.")
+                            }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text("+") }
+                            Spacer(Modifier.weight(1f))
+                            TextButton(onClick = { onRemove(line.sku) }) { Text("حذف") }
+                        }
+                    }
+                }
+            }
+            item {
+                Surface(color = Color.White, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Line)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                            Text("تعداد اقلام", color = Muted)
+                            Text(MarketCart.itemCount(cart).toString(), color = Ink, fontWeight = FontWeight.Bold)
+                        }
+                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                            Text("جمع آزمایشی", color = Ink, fontWeight = FontWeight.Bold)
+                            Text("${MarketCart.totalToman(cart)} تومان", color = TealDark, fontWeight = FontWeight.ExtraBold)
+                        }
+                        Text("این مبلغ پیش‌فاکتور نیست و پرداخت یا رزرو کالا انجام نمی‌دهد.", color = Muted, fontSize = 10.sp)
+                        OutlinedButton(onClick = onClear, modifier = Modifier.fillMaxWidth()) { Text("پاک‌کردن کامل سبد") }
+                    }
+                }
+            }
+        }
+    }
+}
 @Composable
 private fun StatCard(label: String, value: String, modifier: Modifier) {
     Surface(modifier, color = Color.White, shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, Line)) {
