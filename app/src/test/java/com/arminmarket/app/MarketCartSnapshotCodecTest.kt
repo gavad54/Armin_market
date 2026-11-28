@@ -30,4 +30,35 @@ class MarketCartSnapshotCodecTest {
             MarketCartSnapshotCodec.decode("v1\nDEMO-A24|100|1\nDEMO-A24|100|2")
         }
     }
+
+    @Test
+    fun rejectsOversizedSnapshotsBeforeParsingRows() {
+        val oversized = "v1\n" + "A".repeat(64 * 1024)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            MarketCartSnapshotCodec.decode(oversized)
+        }
+    }
+
+    @Test
+    fun rejectsSnapshotsWithMoreThanFiveHundredLines() {
+        val rows = (1..501).joinToString("\n") { index ->
+            "SKU${index.toString().padStart(3, '0')}|100|1"
+        }
+
+        assertThrows(IllegalArgumentException::class.java) {
+            MarketCartSnapshotCodec.decode("v1\n$rows")
+        }
+    }
+
+    @Test
+    fun rejectsEncodingMoreThanFiveHundredCartLines() {
+        val cart = (1..501).map { index ->
+            MarketCartLine("SKU${index.toString().padStart(3, '0')}", 100L, 1)
+        }
+
+        assertThrows(IllegalArgumentException::class.java) {
+            MarketCartSnapshotCodec.encode(cart)
+        }
+    }
 }
